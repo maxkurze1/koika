@@ -283,10 +283,54 @@ Notation "'{' fn '}' args" :=
 
 Notation "'extcall' method '(' arg ')'" := (ExternalCall method arg) (in custom koika_t at level 98, method constr at level 0, arg custom koika_t).
 
-Notation "'get' '(' v ',' f ')'"                    := (Unop  (Struct1 GetField _      (PrimTypeInference.find_field _ f))  v  ) (in custom koika_t at level 1,                       v custom koika_t at level 13,                             f custom koika_t_var at level 0, format "'get' '(' v ','  f ')'").
-Notation "'getbits' '(' t ',' v ',' f ')'"          := (Unop  (Bits1 (GetFieldBits t   (PrimTypeInference.find_field t f))) v  ) (in custom koika_t at level 1, t constr at level 11, v custom koika_t at level 13,                             f custom koika_t_var at level 0, format "'getbits' '(' t ','  v ','  f ')'").
-Notation "'subst' '(' v ',' f ',' a ')'"            := (Binop (Struct2 SubstField _    (PrimTypeInference.find_field _ f))  v a) (in custom koika_t at level 1,                       v custom koika_t at level 13, a custom koika_t at level 13, f custom koika_t_var at level 0, format "'subst' '(' v ','  f ',' a ')'").
-Notation "'substbits' '(' t ',' v ',' f ',' a ')'"  := (Binop (Bits2 (SubstFieldBits t (PrimTypeInference.find_field t f))) v a) (in custom koika_t at level 1, t constr at level 11, v custom koika_t at level 13, a custom koika_t at level 13, f custom koika_t_var at level 0, format "'substbits' '(' t ','  v ','  f ',' a ')'").
+Notation "'get' '(' v ',' f ')'"                    := (fun (v : struct_t sig) => (Unop  (Struct1 GetField _      (must (List_assoc f sig.(struct_fields))))  v  ) v) (in custom koika_t at level 1,                       v custom koika_t at level 13,                             f custom koika_t_var at level 0, format "'get' '(' v ','  f ')'").
+Notation "'getbits' '(' t ',' v ',' f ')'"          := (Unop  (Bits1 (GetFieldBits t   (must (PrimTypeInference.find_field t f)))) v  ) (in custom koika_t at level 1, t constr at level 11, v custom koika_t at level 13,                             f custom koika_t_var at level 0, format "'getbits' '(' t ','  v ','  f ')'").
+Notation "'subst' '(' v ',' f ',' a ')'"            := (Binop (Struct2 SubstField _    (must (PrimTypeInference.find_field _ f)))  v a) (in custom koika_t at level 1,                       v custom koika_t at level 13, a custom koika_t at level 13, f custom koika_t_var at level 0, format "'subst' '(' v ','  f ',' a ')'").
+Notation "'substbits' '(' t ',' v ',' f ',' a ')'"  := (Binop (Bits2 (SubstFieldBits t (must (PrimTypeInference.find_field t f)))) v a) (in custom koika_t at level 1, t constr at level 11, v custom koika_t at level 13, a custom koika_t at level 13, f custom koika_t_var at level 0, format "'substbits' '(' t ','  v ','  f ',' a ')'").
+
+
+Notation must_field sig f :=
+  (must (List_assoc f sig.(struct_fields))).
+
+Class GetField (sig: struct_sig) (f: string) :=
+  sf_idx : struct_index sig.
+
+(* Hint Extern 1 (StructField ?sig ?f) => exact (must_field sig f) : typeclass_instances. *)
+(* Hint Mode StructField + + : typeclass_instances. *)
+
+Notation "'get@' sig '(' v ',' f ')'" :=
+  (Unop (Struct1 GetField sig (must (List_assoc f sig.(struct_fields)))) v)
+    (in custom koika_t,
+        sig constr at level 0,
+        v custom koika_t at level 13,
+        f custom koika_t_var at level 0,
+        format "'get@' sig '(' v ','  f ')'").
+
+Notation "'getbits@' sig '(' v ',' f ')'" :=
+  (Unop (Bits1 (GetFieldBits sig (must (List_assoc f sig.(struct_fields))))) v)
+    (in custom koika_t,
+        sig constr at level 0,  (* FIXME parsing.v level *)
+        v custom koika_t at level 13,
+        f custom koika_t_var at level 0,
+        format "'getbits@' sig '(' v ','  f ')'").
+
+Notation "'subst@' sig '(' v ',' f ',' a ')'" :=
+  (Binop (Struct2 SubstField sig (must (List_assoc f sig.(struct_fields)))) v a)
+    (in custom koika_t,
+        sig constr at level 0,
+        v custom koika_t at level 13,
+        a custom koika_t at level 13,
+        f custom koika_t_var at level 0,
+        format "'subst@' sig '(' v ','  f ',' a ')'").
+
+Notation "'substbits@' sig '(' v ',' f ',' a ')'" :=
+  (Binop (Bits2 (SubstFieldBits sig (must (List_assoc f sig.(struct_fields))))) v a)
+    (in custom koika_t,
+        sig constr at level 0,
+        v custom koika_t at level 13,
+        a custom koika_t at level 13,
+        f custom koika_t_var at level 0,
+        format "'substbits@' sig '(' v ','  f ','  a ')'").
 
 (* TODO evaluate what this array feature should do and how far it is implemented *)
 (* Notation "'aref' '(' v ',' f ')'"                   := (Unop  (Array1  (UGetElement         f)) v)   (in custom koika_t at level 1,                       v custom koika_t at level 13,                             f constr at level 0,           format "'aref' '(' v ','  f ')'").
@@ -357,10 +401,18 @@ Notation "a ';'" := (cons a nil)
   (in custom koika_t_struct_init at level 1, a custom koika_t_struct_field).
 
 
-Notation "'struct' sig '{' '}'" :=
+Notation "'struct' sig '::{' '}'" :=
   (struct_init sig []) (in custom koika_t at level 1, sig constr at level 0).
 
-Notation "'struct' sig '{' fields '}'" :=
+Notation "'struct' sig '::{' fields '}'" :=
+  (struct_init sig fields) (in custom koika_t at level 1, sig constr at level 0,
+  fields custom koika_t_struct_init).
+
+(* Needs the same level as 'Var' + level of first non-terminal must match *)
+Notation "sig '::{' '}'" :=
+  (struct_init sig []) (in custom koika_t at level 1, sig constr at level 0).
+
+Notation "sig '::{' fields '}'" :=
   (struct_init sig fields) (in custom koika_t at level 1, sig constr at level 0,
   fields custom koika_t_struct_init).
 
@@ -387,20 +439,35 @@ Notation "a" := (cons a nil)
 Notation "a ';'" := (cons a nil)
   (in custom koika_t_struct_init_constr at level 1, a custom koika_t_struct_field_constr).
 
-Notation "'struct' structtype '<' '>'" :=
-  (value_of_bits Bits.zero : (struct_t structtype)) (at level 0, structtype constr at level 0).
-Notation "'struct' structtype '<' fields '>'" :=
-  (ltac:(let e := struct_init_from_list structtype fields in exact e) : (struct_t structtype)) (at level 0, structtype constr at level 0, fields custom koika_t_struct_init_constr at level 200, only parsing).
+Notation "'struct' structtype '::{' '}'" :=
+  (value_of_bits Bits.zero : (struct_t structtype)) (at level 1, structtype constr at level 0).
+Notation "'struct' structtype '::{' fields '}'" :=
+  (ltac:(let e := struct_init_from_list structtype fields in exact e) : (struct_t structtype)) (at level 1, structtype constr at level 0, fields custom koika_t_struct_init_constr).
+
+Notation "structtype '::{' '}'" :=
+  (value_of_bits Bits.zero : (struct_t structtype)) (at level 1, structtype constr).
+Notation "structtype '::{' fields '}'" :=
+  (ltac:(let e := struct_init_from_list structtype fields in exact e) : (struct_t structtype)) (at level 1, structtype constr, fields custom koika_t_struct_init_constr).
+
 
 (* TODO i would like to use different paratesis here *)
-Notation "'enum' sig '{' f '}'" :=
+Notation "'enum' sig '::<' f '>'" :=
   (Const (tau := enum_t sig) (vect_nth sig.(enum_bitpatterns) (must (vect_index f sig.(enum_members)))))
-    (in custom koika_t at level 1, sig constr at level 1, f custom koika_t_var at level 1).
+    (in custom koika_t at level 1, sig constr at level 0, f custom koika_t_var).
+(* shorter syntax to omit 'enum' keyword *)
+(* Needs the same level as 'Var' + level of first non-terminal must match *)
+Notation "sig '::<' f '>'" :=
+  (Const (tau := enum_t sig) (vect_nth sig.(enum_bitpatterns) (must (vect_index f sig.(enum_members)))))
+    (in custom koika_t at level 1, sig constr at level 0, f custom koika_t_var).
+
 
 (* creating enums literal in constr (normal Coq) *)
-Notation "'enum' sig '<' f '>'" :=
+Notation "'enum' sig '::<' f '>'" :=
   ((vect_nth sig.(enum_bitpatterns)) (must (vect_index f sig.(enum_members))))
-    (at level 0, sig constr at level 1, f custom koika_t_var at level 1).
+    (at level 1, sig constr at level 0, f custom koika_t_var).
+Notation "sig '::<' f '>'" :=
+  ((vect_nth sig.(enum_bitpatterns)) (must (vect_index f sig.(enum_members))))
+    (at level 1, sig constr, f custom koika_t_var, format "sig '::<' f '>'").
 
 (* Koika_branches *)
 Declare Custom Entry koika_t_branches.
@@ -417,6 +484,7 @@ Notation "'match' var 'with' '|' branches 'return' 'default' ':' default 'end'" 
 
 (* TODO does this really has to be `bits_t _` *)
 (* TODO add support for enum and struct constants *)
+(* Todo fix usage #(Ob);pass is bound as a whole ? *)
 Notation "'#' s" := (Const (tau := bits_t _) s) (in custom koika_t at level 98, s constr at level 0, only parsing).
 
 (* scheduler *)
@@ -452,7 +520,7 @@ Module Type Tests.
   |}%vect.
 
   Definition test_enum : _action := <{
-    enum numbers_e { ONE }
+    enum numbers_e::<ONE>
   }>.
 
   Definition func : function R Sigma := <{
@@ -490,19 +558,19 @@ Module Type Tests.
   |}.
 
   Definition test_struct_init : _action := <{
-    struct numbers_s {
+    struct numbers_s::{
       one := Ob~1~1~1;
       two := Ob~1~1~1
     }
   }>.
   Definition test_struct_init_trailing_comma : _action := <{
-    struct numbers_s {
+    struct numbers_s::{
       two   := |"100":b| ;
       three := |"101":b| ;
     }
   }>.
   Definition test_struct_init_empty : _action := <{
-    struct numbers_s {}
+    struct numbers_s::{}
   }>.
 End Tests.
 Module Type Tests2.
@@ -544,6 +612,13 @@ Module Type Tests2.
   Definition test_26 (sz : nat) : function R Sigma := <{ fun test () : bits_t sz  => fail(sz) }>.
   Definition test_write : _action := <{ write0(data0, |0b"01101"|) }>.
 
+  Definition min {reg_t ext_fn_t : Type} {R : reg_t -> type}
+    {Sigma : ext_fn_t -> ExternalSignature}
+    (bit_size : nat) : function R Sigma := <{
+    fun min (first: bits_t bit_size) (second: bits_t bit_size) : bits_t bit_size =>
+      if first < second then first else second
+    }>.
+
   #[program ]Definition idk : _action (tau := bits_t 3) := <{
     (!read0(data0))[Ob~1~1~1 :+ 3]
   }>.
@@ -582,13 +657,13 @@ Module Type Tests2.
 
   Definition test_30'' : _action := <{
     let upu := |0x"C0"| in
-    struct mem_req { foo := upu[#(Bits.of_nat _ 0) :+ 2] ;
+    struct mem_req::{ foo := upu[#(Bits.of_nat _ 0) :+ 2] ;
                       bar := |32`d98| }
   }>.
 
   Program Definition test_31' : _action := <{
     let upu := |0x"C0"| in
-    let a := struct mem_req { foo := upu[#(Bits.of_nat 3 0) :+ 2] ;
+    let a := struct mem_req::{ foo := upu[#(Bits.of_nat 3 0) :+ 2] ;
                               bar := |32`d98| } in
       unpack(struct_t mem_req, pack(a))
   }>.
@@ -653,12 +728,12 @@ Module Type Tests2.
   |}%vect.
 
   (* Accessing enum constants *)
-  Definition enum_test_1 := enum numbers_e < ONE >.
-  Definition enum_test_2 := enum numbers_e < TWO >.
-  Definition enum_test_3 :  enum numbers_e < ONE >   = |"001":b| := eq_refl.
-  Definition enum_test_4 :  enum numbers_e < TWO >   = |"010":b| := eq_refl.
-  Definition enum_test_5 :  enum numbers_e < THREE > = |"011":b| := eq_refl.
-  Definition enum_test_6 :  enum numbers_e < IDK >   = |"111":b| := eq_refl.
+  Definition enum_test_1 := enum numbers_e::< ONE >.
+  Definition enum_test_2 := enum numbers_e::< TWO >.
+  Definition enum_test_3 :  enum numbers_e::< ONE >   = |"001":b| := eq_refl.
+  Definition enum_test_4 :  enum numbers_e::< TWO >   = |"010":b| := eq_refl.
+  Definition enum_test_5 :  enum numbers_e::< THREE > = |"011":b| := eq_refl.
+  Definition enum_test_6 :  enum numbers_e::< IDK >   = |"111":b| := eq_refl.
 
   Definition numbers_s := {|
     struct_name:= "some_s";
@@ -669,14 +744,19 @@ Module Type Tests2.
       ("four" , bits_t 3);
       ("five" , enum_t numbers_e) ]
   |}.
-  Definition struct_test_1 := struct numbers_s < >.
-  Definition struct_test_2 :  struct numbers_s < > = value_of_bits Bits.zero := eq_refl.
-  Definition struct_test_3 := struct numbers_s < one := |"010":b| >.
-  Definition struct_test_7 := struct numbers_s < one := Bits.of_N 3 3; two := Bits.of_N 3 2; >. (* trailing comma *)
-  Definition struct_test_4 :  struct numbers_s < one := |"010":b| ; two := |"111":b| > = (Ob~0~1~0, (Ob~1~1~1, (Ob~0~0~0, (Ob~0~0~0, (Ob~0~0~0, tt))))) := eq_refl.
-  Definition struct_test_5 :  struct numbers_s < five := enum numbers_e < IDK > >      = (Ob~0~0~0, (Ob~0~0~0, (Ob~0~0~0, (Ob~0~0~0, (Ob~1~1~1, tt))))) := eq_refl.
-  Fail Definition struct_test_6 := struct numbers_s < five := enum numbers_e < WRONG > >.
-  Fail Definition struct_test_8 := struct numbers_s < wrong := Bits.of_N 3 3 >.
+
+  Definition test_get : function R Sigma := <{
+    fun idk (num : struct_t numbers_s) : bits_t 1 =>
+      get@numbers_s(num, one) == Ob~0~0~1
+  }>.
+  Definition struct_test_1 := struct numbers_s::{ }.
+  Definition struct_test_2 :  struct numbers_s::{ } = value_of_bits Bits.zero := eq_refl.
+  Definition struct_test_3 := struct numbers_s::{ one := |"010":b| }.
+  Definition struct_test_7 := struct numbers_s::{ one := Bits.of_N 3 3; two := Bits.of_N 3 2; }. (* trailing comma *)
+  Definition struct_test_4 :  struct numbers_s::{ one := |"010":b| ; two := |"111":b| } = (Ob~0~1~0, (Ob~1~1~1, (Ob~0~0~0, (Ob~0~0~0, (Ob~0~0~0, tt))))) := eq_refl.
+  Definition struct_test_5 :  struct numbers_s::{ five := enum numbers_e::< IDK > }      = (Ob~0~0~0, (Ob~0~0~0, (Ob~0~0~0, (Ob~0~0~0, (Ob~1~1~1, tt))))) := eq_refl.
+  Fail Definition struct_test_6 := struct numbers_s::{ five := enum numbers_e::< WRONG > }.
+  Fail Definition struct_test_8 := struct numbers_s::{ wrong := Bits.of_N 3 3 }.
 
   Definition num_test_b_1 : [| |"01101":b|       =koika= Ob~0~1~1~0~1 |] := eq_refl.
   Definition num_test_b_2 : [| |0b"00011"|       =koika= Ob~0~0~0~1~1 |] := eq_refl.
