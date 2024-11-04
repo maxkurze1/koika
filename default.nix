@@ -5,6 +5,7 @@
 , python3
 , sphinx
 , equations
+, coqPackages
   # , coq-unicoq
 , doCheck ? false
 ,
@@ -49,6 +50,7 @@ mkCoqDerivation rec {
     hashcons
     zarith
     equations
+    coqPackages.coq-lsp
     # coq-unicoq
   ];
 
