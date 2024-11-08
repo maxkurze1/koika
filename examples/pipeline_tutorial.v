@@ -156,10 +156,10 @@ Forcing this infinite stream simulates the whole system directly inside Coq: for
 |*)
 
 Compute (Streams.firstn 5
-           (Streams.map (fun r => r.[input_buffer])
+           (Streams.map (fun r => r?[input_buffer])
                         system_states)). (* .unfold *)
 Compute (Streams.firstn 5
-           (Streams.map (fun r => @Bits.to_nat 32 r.[input_buffer])
+           (Streams.map (fun r => @Bits.to_nat 32 r?[input_buffer])
                         system_states)). (* .unfold *)
 
 (*|
@@ -168,10 +168,10 @@ Compute (Streams.firstn 5
 |*)
 
 Compute (Streams.firstn 5
-           (Streams.map (fun r => r.[output_buffer])
+           (Streams.map (fun r => r?[output_buffer])
                         system_states)). (* .unfold *)
 Compute (Streams.firstn 5
-           (Streams.map (fun r => @Bits.to_nat 32 r.[output_buffer])
+           (Streams.map (fun r => @Bits.to_nat 32 r?[output_buffer])
                         system_states)). (* .unfold *)
 
 (*|
@@ -179,7 +179,7 @@ Simulating this way is convenient for exploring small bits of code; for large de
 |*)
 
 Time Compute (@Bits.to_nat 32
-             (Streams.Str_nth 1000 system_states).[output_buffer]). (* .unfold *)
+             (Streams.Str_nth 1000 system_states)?[output_buffer]). (* .unfold *)
 
 (*|
 Running individual rules
@@ -245,10 +245,10 @@ Definition circuit_states :=
   Streams.coiterate (interp_circuits σ circuits) (lower_r r).
 
 Compute (Streams.firstn 5
-           (Streams.map (fun r => r.[output_buffer])
+           (Streams.map (fun r => r?[output_buffer])
                         circuit_states)). (* .unfold *)
 Compute (Streams.firstn 5
-           (Streams.map (fun r => @Bits.to_nat 32 r.[output_buffer])
+           (Streams.map (fun r => @Bits.to_nat 32 r?[output_buffer])
                         circuit_states)). (* .unfold *)
 
 (*|
@@ -300,7 +300,7 @@ Here is the stream of inputs consumed by the spec: we just iterate ``NextInput``
 |*)
 
     Definition spec_inputs :=
-      Streams.coiterate (σ NextInput) r.[input_buffer].
+      Streams.coiterate (σ NextInput) r?[input_buffer].
 
 (*|
 Here is the expected stream of outputs, which we call “observations”.  We only expect outputs to start becoming available after completing two cycles, so we simply state that the value in ``output_buffer`` should be unchanged until then:
@@ -308,8 +308,8 @@ Here is the expected stream of outputs, which we call “observations”.  We on
 
     Definition spec_observations :=
       let composed x := σ G (σ F x) in
-      r.[output_buffer] ::: (* Initial value *)
-      r.[output_buffer] ::: (* Unchanged after one cycle *)
+      r?[output_buffer] ::: (* Initial value *)
+      r?[output_buffer] ::: (* Unchanged after one cycle *)
       Streams.map composed spec_inputs. (* Actual outputs *)
 
 (*|
@@ -328,7 +328,7 @@ Finally, here is the actual stream of observations produced by the implementatio
 |*)
 
     Definition impl_observations :=
-      Streams.map (fun r => r.[output_buffer]) impl_trace.
+      Streams.map (fun r => r?[output_buffer]) impl_trace.
   End Spec.
 
 (*|
@@ -350,10 +350,10 @@ Here is our two-cycle characterization: if we execute our circuit twice, ``input
 
     Definition phi2 (r: ContextEnv.(env_t) R)
       : ContextEnv.(env_t) R :=
-      #{ input_buffer => σ NextInput (σ NextInput r.[input_buffer]);
+      #{ input_buffer => σ NextInput (σ NextInput r?[input_buffer]);
          queue_empty => Ob~0;
-         queue_data => σ F (σ NextInput r.[input_buffer]);
-         output_buffer => σ G (σ F r.[input_buffer]) }#.
+         queue_data => σ F (σ NextInput r?[input_buffer]);
+         output_buffer => σ G (σ F r?[input_buffer]) }#.
 
 (*|
 Proving this characterization is just a matter of abstract interpretation:
@@ -376,7 +376,7 @@ There are three cases: ``negb (Bits.single r.[queue_empty])``, in which both ``d
 To explore these cases we do a case split on ``r.[queue_empty]``, and simplify to show that they lead to the same result:
 |*)
 
-      destruct (Bits.single r.[queue_empty]); abstract_simpl. (* .unfold *)
+      destruct (Bits.single r?[queue_empty]); abstract_simpl. (* .unfold *)
       all: reflexivity.
     Qed.
 
@@ -387,7 +387,7 @@ With this done, we can now prove a stronger characterization that holds for any 
     Definition phi_iterated n
                (r: ContextEnv.(env_t) R)
       : ContextEnv.(env_t) R :=
-      let input := r.[input_buffer] in
+      let input := r?[input_buffer] in
       #{ input_buffer => iterate (S (S n)) (σ NextInput) input;
          queue_empty => Ob~0;
          queue_data => σ F (iterate (S n) (σ NextInput) input);
@@ -417,7 +417,7 @@ And this is enough to complete our proof!  We'll manually match up the first two
 
     Theorem correct_pipeline:
       forall (r: ContextEnv.(env_t) R),
-        r.[queue_empty] = Ob~1 ->
+        r?[queue_empty] = Ob~1 ->
         Streams.EqSt (impl_observations r) (spec_observations r).
     Proof.
       intros r Hqueue_empty.
@@ -476,7 +476,7 @@ Definition ext_fn_names fn :=
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;
-                   koika_reg_init reg := r.[reg];
+                   koika_reg_init reg := r?[reg];
                    koika_ext_fn_types := Sigma;
                    koika_rules := rules;
                    koika_rule_external := external;

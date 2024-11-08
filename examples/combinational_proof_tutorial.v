@@ -240,7 +240,7 @@ Definition r : ContextEnv.(env_t) R :=
 
 Definition package :=
   {| ip_koika := {| koika_reg_types := R;
-                   koika_reg_init reg := r.[reg];
+                   koika_reg_init reg := r?[reg];
                    koika_ext_fn_types := empty_Sigma;
                    koika_rules := rules;
                    koika_rule_external _ := false;
