@@ -7,7 +7,7 @@ Module CL := Koika.CompactLogs.
 Module CS := Koika.CompactSemantics.
 
 (* This dependently-typed function is required for the type of the context. *)
-Definition input { sig : list (string * type) } := context ( fun (x : (string * type)) => type_denote (snd x) ) sig.
+Definition input { sig : list (string * type) } := context (fun (x : (string * type)) => type_denote (snd x)) sig.
 Notation "'assert' a ':=' b 'in' body" := (match b with | a => body | _ => False end) (at level 200, a pattern).
 
 Notation "k := v" := (CtxCons (k, _) v CtxEmpty) (at level 200, only printing).

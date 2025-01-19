@@ -22,6 +22,18 @@ Module Collatz.
     | r0 => Bits.of_nat sz 18
     end.
 
+  Definition idk : uaction reg_t empty_ext_fn_t :=
+  {{
+    write0(r0, Ob~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0);
+    let v := read0(r0) in
+    pass
+  }}.
+  Definition tc_idk := tc_rule R empty_Sigma idk.
+
+  Definition env := ContextEnv.(create) r.
+
+  Compute (interp_action env empty_sigma CtxEmpty log_empty log_empty tc_idk).
+
   Definition times_three : UInternalFunction reg_t empty_ext_fn_t :=
     {{ fun times_three (bs: bits_t 16) : bits_t 16 =>
          (bs << Ob~1) + bs }}.

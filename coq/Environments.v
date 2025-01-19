@@ -433,12 +433,13 @@ Lemma equiv_refl {K} (E: Env K) {V: esig K} (ev: E.(env_t) V) :
 Proof. firstorder. Qed.
 
 Lemma equiv_eq {K} (E: Env K) {V: esig K} (ev1 ev2: E.(env_t) V) :
-  equiv E ev1 ev2 ->
+  equiv E ev1 ev2 <->
   ev1 = ev2.
 Proof.
-  intros.
-  rewrite <- (E.(create_getenv_id) ev1), <- (E.(create_getenv_id) ev2).
-  apply create_funext; assumption.
+  split.
+  - intros. rewrite <- (E.(create_getenv_id) ev1), <- (E.(create_getenv_id) ev2).
+    apply create_funext; assumption.
+  - now intros [] k.
 Qed.
 
 Definition update {K} (E: Env K) {V: esig K}
@@ -519,6 +520,6 @@ Definition ContextEnv {K} {FT: FiniteType K}: Env K.
   - intros; apply cassoc_creplace_neq_k; eassumption.
 Defined.
 
-Notation "env .[ idx ]" := (ContextEnv.(getenv) env idx) (at level 1, format "env .[ idx ]").
+Notation "env .[ idx ]" := (getenv _ env idx) (at level 1, format "env .[ idx ]").
 Notation "env '.N[' idx ']'" := (Bits.to_N (ContextEnv.(getenv) env idx)) (at level 1, format "env .N[ idx ]").
 Notation "env '.nat[' idx ']'" := (Bits.to_nat (ContextEnv.(getenv) env idx)) (at level 1, format "env .nat[ idx ]").
