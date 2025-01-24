@@ -136,7 +136,8 @@ Qed.
 
 Ltac simpl_hoare :=
   repeat match goal with
-  | H: interp_action _ _ _ _ _ ?a = Some _ |- _ => head_constructor a; simpl in H
+  | H: interp_action _ _ _ _ _ ?a = Some _ |- _ => head_constructor a; cbn in H
+  | H: interp_args _ _ _ _ _ ?a = Some _ |- _ => head_constructor a; cbn in H
   | H: opt_bind ?a _ = Some _ |- _ => destruct a eqn:?Heq; inversion H; clear H
   | H: prod _ _ |- _ => destruct H
   | H: and _ _ |- _ => destruct H
@@ -182,6 +183,7 @@ Section Hoare.
   Context {REnv: Env reg_t}.
 
   #[local] Notation action := (TypedSyntax.action unit string string R Sigma).
+  #[local] Notation acontext := (@TypedSemantics.acontext unit string string _ _ R Sigma).
 
   #[local] Ltac simpl_hoare' custom :=
     repeat (simpl_hoare + custom).
@@ -200,77 +202,113 @@ Section Hoare.
   #[local] Tactic Notation "clear_all" "keep[" hyp(k) "]" :=
     clear_all k.
 
-  (* We can actually only proof an implication here since some evaluations might
-    fail with a None on the longer scheduler log, but succeed with a Some on the
-    shortened version *)
-  Fixpoint interp_scheduler_log_irrelevance sig tau (a : action sig tau) :
-    ∀ (env : REnv.(env_t) R) sigma Γ Γ' slog slog' alog alog_out r,
-    interp_action env sigma Γ (log_app slog slog') alog a = Some (alog_out, r, Γ') ->
-    interp_action (commit_update env slog') sigma Γ slog alog a = Some (alog_out, r, Γ').
-  Proof.
-    Local Ltac solve_shed_log_irr := simpl_hoare [try match goal with
-    | H: ∀ _ _ _ _ _ _ _ _ _ _ _ _,
+  Local Ltac solve_shed_log_irr := simpl_hoare [try match goal with
+    | H: ∀ _ _ _ _ _ _ _ _ _,
       interp_action _ _ _ (log_app _ _) _ _ = Some _ ->
       interp_action _ _ _ _ _ _ = Some _,
       H1: interp_action _ _ _ (log_app ?sl ?sl2 ) ?al ?a = Some _ |-
       context[interp_action (commit_update _ ?sl2) _ _ ?sl ?al ?a] =>
-      setoid_rewrite (H _ _ _ _ _ _ _ _ _ _ _ _ H1)
+      setoid_rewrite (H _ _ _ _ _ _ _ _ _ H1)
+    | H: ∀ _ _ _ _ _ _ _ _ _,
+      interp_args _ _ _ (log_app _ _) _ _ = Some _ ->
+      interp_args _ _ _ _ _ _ = Some _,
+      H1: interp_args _ _ _ (log_app ?sl ?sl2 ) ?al ?a = Some _ |-
+      context[interp_args (commit_update _ ?sl2) _ _ ?sl ?al ?a] =>
+      setoid_rewrite (H _ _ _ _ _ _ _ _ _ H1)
     end].
-    destruct a; cbn; intros; solve_shed_log_irr.
-    (* Special treatment necessary for the induction over the argument list of a
-      internal function call *)
-    - enough (H : ∀ l r Γ Γ',
-        interp_args env sigma Γ (log_app slog slog') alog args = Some (l, r, Γ') ->
-        interp_args (commit_update env slog') sigma Γ slog alog args = Some (l, r, Γ')
-      ).
-      + rewrite (H _ _ _ _ Heq). solve_shed_log_irr.
-      + clear_all keep[ interp_scheduler_log_irrelevance ].
-        induction args; intros; cbn in H; solve_shed_log_irr.
-        rewrite (IHargs _ _ _ _ Heq).
-        solve_shed_log_irr.
+  (* We can actually only proof an implication here since some evaluations might
+    fail with a None on the longer scheduler log, but succeed with a Some on the
+    shortened version *)
+  Lemma interp_slog_irrelevance :
+    ( ∀ {sig tau} {a : action sig tau},
+      ∀ {env : REnv.(env_t) R} {sigma Γ Γ' slog slog' alog alog_out r},
+      interp_action env sigma Γ (log_app slog slog') alog a = Some (alog_out, r, Γ') ->
+      interp_action (commit_update env slog') sigma Γ slog alog a = Some (alog_out, r, Γ') )
+    /\
+    ( ∀ {sig argspec} {args : acontext sig argspec},
+      ∀ {env : REnv.(env_t) R} {sigma Γ Γ' slog slog' alog alog_out r},
+      interp_args env sigma Γ (log_app slog slog') alog args = Some (alog_out, r, Γ') ->
+      interp_args (commit_update env slog') sigma Γ slog alog args = Some (alog_out, r, Γ') ).
+  Proof.
+    apply action_ind_complete; intros; solve_shed_log_irr.
   Qed.
 
-  Fixpoint interp_action_log_irrelevance `{FiniteType reg_t} sig tau (a : action sig tau) :
-    ∀ (env : REnv.(env_t) R) sigma Γ Γ' slog alog alog' alog_out r,
+  Lemma interp_action_slog_irrelevance :
+    ∀ {sig tau} {a : action sig tau},
+    ∀ {env : REnv.(env_t) R} {sigma Γ Γ' slog slog' alog alog_out r},
+    interp_action env sigma Γ (log_app slog slog') alog a = Some (alog_out, r, Γ') ->
+    interp_action (commit_update env slog') sigma Γ slog alog a = Some (alog_out, r, Γ').
+    apply interp_slog_irrelevance. Qed.
+
+  Lemma interp_args_slog_irrelevance :
+    ∀ {sig argspec} {args : acontext sig argspec},
+    ∀ {env : REnv.(env_t) R} {sigma Γ Γ' slog slog' alog alog_out r},
+    interp_args env sigma Γ (log_app slog slog') alog args = Some (alog_out, r, Γ') ->
+    interp_args (commit_update env slog') sigma Γ slog alog args = Some (alog_out, r, Γ').
+    apply interp_slog_irrelevance. Qed.
+
+  Local Ltac solve_act_log_irr := simpl_hoare [try match goal with
+  | H: ∀ _ _ _ _ _ _ _ _ _,
+    interp_action _ _ _ _ (log_app _ _) _ = Some _ ->
+    ∃ _, _,
+    H1: interp_action _ _ _ ?sl (log_app ?al1 ?al2) ?a = Some _ |-
+    context[interp_action _ _ _ (log_app ?al2 ?sl) ?al1 ?a] =>
+    let H' := fresh "H" in
+    pose proof (H' := H _ _ _ _ _ _ _ _ _ H1);
+    destruct H' as [?l [H' ?]]; subst;
+    setoid_rewrite H'
+  | H: ∀ _ _ _ _ _ _ _ _ _,
+    interp_args _ _ _ _ (log_app _ _) _ = Some _ ->
+    ∃ _, _,
+    H1: interp_args _ _ _ ?sl (log_app ?al1 ?al2) ?a = Some _ |-
+    context[interp_args _ _ _ (log_app ?al2 ?sl) ?al1 ?a] =>
+    let H' := fresh "H" in
+    pose proof (H' := H _ _ _ _ _ _ _ _ _ H1);
+    destruct H' as [?l [H' ?]]; subst;
+    setoid_rewrite H'
+  | |- context[log_cons _ _ (log_app _ _)] => rewrite log_cons_app by easy
+  | _ => solve [eexists; split; reflexivity]
+  end].
+
+  Context `{FiniteType reg_t}.
+
+  Lemma interp_alog_irrelevance :
+    ( ∀ {sig tau} {a : action sig tau},
+      ∀ {env : REnv.(env_t) R} {sigma Γ Γ' slog alog alog' alog_out r},
+      interp_action env sigma Γ slog (log_app alog' alog) a = Some (alog_out, r, Γ') ->
+      exists alog_out',
+      interp_action env sigma Γ (log_app alog slog) alog' a = Some (alog_out', r, Γ') /\
+      alog_out = log_app alog_out' alog )
+    /\
+    ( ∀ {sig argspec} {args : acontext sig argspec},
+      ∀ {env : REnv.(env_t) R} {sigma Γ Γ' slog alog alog' alog_out r},
+      interp_args env sigma Γ slog (log_app alog' alog) args = Some (alog_out, r, Γ') ->
+      exists alog_out',
+      interp_args env sigma Γ (log_app alog slog) alog' args = Some (alog_out', r, Γ') /\
+      alog_out = log_app alog_out' alog ).
+  Proof.
+    apply action_ind_complete; intros; solve_act_log_irr.
+  Qed.
+
+  Lemma interp_action_alog_irrelevance :
+    ∀ {sig tau} {a : action sig tau},
+    ∀ {env : REnv.(env_t) R} {sigma Γ Γ' slog alog alog' alog_out r},
     interp_action env sigma Γ slog (log_app alog' alog) a = Some (alog_out, r, Γ') ->
     exists alog_out',
     interp_action env sigma Γ (log_app alog slog) alog' a = Some (alog_out', r, Γ') /\
-    alog_out = log_app alog_out' alog.
-  Proof.
-    Local Ltac solve_act_log_irr := simpl_hoare [try match goal with
-    | H: _ -> ∀ _ _ _ _ _ _ _ _ _ _ _ _,
-      interp_action _ _ _ _ (log_app _ _) _ = Some _ ->
-      ∃ _, _,
-      H1: interp_action _ _ _ ?sl (log_app ?al1 ?al2) ?a = Some _ |-
-      context[interp_action _ _ _ (log_app ?al2 ?sl) ?al1 ?a] =>
-      let H' := fresh "H" in
-      pose proof (H' := H _ _ _ _ _ _ _ _ _ _ _ _ _ H1);
-      destruct H' as [?l [H' ?]]; subst;
-      setoid_rewrite H'
-    | |- context[log_cons _ _ (log_app _ _)] => rewrite log_cons_app by easy
-    | _ => solve [eexists; split; reflexivity]
-    end].
-    destruct a; cbn; intros; solve_act_log_irr.
-    - enough (Hargs: ∀ alog_out r Γ Γ',
-        interp_args env sigma Γ slog (log_app alog' alog) args = Some (alog_out, r, Γ') ->
-        exists alog_out',
-        interp_args env sigma Γ (log_app alog slog) alog' args = Some (alog_out', r, Γ') /\
-        alog_out = log_app alog_out' alog
-      ).
-      + pose proof (H' := Hargs _ _ _ _ Heq).
-        destruct H' as [? [H' ?]]; subst.
-        rewrite H'. solve_act_log_irr.
-      + (* clear_all keep[ interp_action_log_irrelevance ]. *)
-        clear Heq Heq0 t1 t0 l r alog_out Γ Γ' fn.
-        induction args; intros; cbn in H0; solve_act_log_irr.
-        pose proof (H' := IHargs _ _ _ _ Heq).
-        destruct H' as [? [H' ?]]; subst.
-        rewrite H'.
-        solve_act_log_irr.
-  Qed.
+    alog_out = log_app alog_out' alog. apply (interp_alog_irrelevance). Qed.
 
-  Fixpoint interp_log_irrelevance `{FiniteType reg_t} sig tau (a : action sig tau) :
-    ∀ (env : REnv.(env_t) R) sigma Γ Γ' slog alog alog_out r,
+  Lemma interp_args_alog_irrelevance :
+    ∀ {sig argspec} {args : acontext sig argspec},
+    ∀ {env : REnv.(env_t) R} {sigma Γ Γ' slog alog alog' alog_out r},
+    interp_args env sigma Γ slog (log_app alog' alog) args = Some (alog_out, r, Γ') ->
+    exists alog_out',
+    interp_args env sigma Γ (log_app alog slog) alog' args = Some (alog_out', r, Γ') /\
+    alog_out = log_app alog_out' alog. apply (interp_alog_irrelevance). Qed.
+
+  Theorem interp_action_log_irrelevance :
+    ∀ {sig tau} {a : action sig tau},
+    ∀ {env : REnv.(env_t) R} {sigma Γ Γ' slog alog alog_out r},
     interp_action env sigma Γ slog alog a = Some (alog_out, r, Γ') ->
     exists alog_out',
     interp_action (commit_update env (log_app alog slog)) sigma Γ log_empty log_empty a = Some (alog_out', r, Γ') /\
@@ -278,10 +316,28 @@ Section Hoare.
   Proof.
     intros * H'.
     rewrite <- (log_app_empty_r alog) in H'.
-    pose proof (Ha := interp_action_log_irrelevance _ _ _ _ _ _ _ _ _ _ _ _ H').
+    pose proof (Ha := interp_action_alog_irrelevance H').
     destruct Ha as [log [Ha Hlog]].
     rewrite <- (log_app_empty_r (log_app _ _)) in Ha.
-    pose proof (Hs := interp_scheduler_log_irrelevance _ _ _ _ _ _ _ _ _ _ _ _ Ha).
+    pose proof (Hs := interp_action_slog_irrelevance Ha).
+    eexists log.
+    now split.
+  Qed.
+
+  Theorem interp_args_log_irrelevance :
+    ∀ {sig argspec} {args : acontext sig argspec},
+    ∀ {env : REnv.(env_t) R} {sigma Γ Γ' slog alog alog_out r},
+    interp_args env sigma Γ slog alog args = Some (alog_out, r, Γ') ->
+    exists alog_out',
+    interp_args (commit_update env (log_app alog slog)) sigma Γ log_empty log_empty args = Some (alog_out', r, Γ') /\
+    alog_out = log_app alog_out' alog.
+  Proof.
+    intros * H'.
+    rewrite <- (log_app_empty_r alog) in H'.
+    pose proof (Ha := interp_args_alog_irrelevance H').
+    destruct Ha as [log [Ha Hlog]].
+    rewrite <- (log_app_empty_r (log_app _ _)) in Ha.
+    pose proof (Hs := interp_args_slog_irrelevance Ha).
     eexists log.
     now split.
   Qed.
@@ -327,66 +383,6 @@ Section Hoare.
     (* an assertion expression *)
     Definition a_exp {t : type} := REnv.(env_t) R -> tcontext sig -> t.
     Definition ret_a_exp {t : type} := tau -> @a_exp t.
-
-    (* The grammar for Hoare logic Assertions *)
-    (* Declare Custom Entry assertion. *)
-
-    (** One small limitation of this approach is that we don't have
-        an automatic way to coerce a function application that appears
-        within an assertion to make appropriate use of the state when its
-        arguments should be interpets as Imp arithmetic expressions.
-        Instead, we introduce a notation [#f e1 .. en] that stands for [(fun
-        st => f (e1 st) .. (en st)], letting us manually mark such function
-        calls when they're needed as part of an assertion.  *)
-
-    (* Notation "# f x .. y" := (fun st => (.. (f ((x : a_exp) st)) .. ((y : a_exp) st)))
-                      (in custom assertion at level 2,
-                      f constr at level 0, x custom assertion at level 1,
-                      y custom assertion at level 1) : assertion_scope. *)
-
-    (* Notation "P -> Q"  := (fun env Γ => (P : assertion) env Γ ->  (Q : assertion) env Γ) (in custom assertion at level 99, right associativity) : assertion_scope.
-    Notation "P <-> Q" := (fun env Γ => (P : assertion) env Γ <-> (Q : assertion) env Γ) (in custom assertion at level 95) : assertion_scope.
-
-    Notation "P \/ Q" := (fun env Γ => (P : assertion) env Γ \/ (Q : assertion) env Γ) (in custom assertion at level 85, right associativity) : assertion_scope.
-    Notation "P /\ Q" := (fun env Γ => (P : assertion) env Γ /\ (Q : assertion) env Γ) (in custom assertion at level 80, right associativity) : assertion_scope.
-    Notation "~ P" := (fun env Γ => ~ ((P : assertion) env Γ)) (in custom assertion at level 75, right associativity) : assertion_scope.
-    Notation "a = b"  := (fun env Γ => (a : a_exp) env Γ =  (b : a_exp) env Γ) (in custom assertion at level 70) : assertion_scope.
-    Notation "a <> b" := (fun env Γ => (a : a_exp) env Γ <> (b : a_exp) env Γ) (in custom assertion at level 70) : assertion_scope.
-    Notation "a <= b" := (fun env Γ => (a : a_exp) env Γ <= (b : a_exp) env Γ) (in custom assertion at level 70) : assertion_scope.
-    Notation "a < b"  := (fun env Γ => (a : a_exp) env Γ <  (b : a_exp) env Γ) (in custom assertion at level 70) : assertion_scope.
-    Notation "a >= b" := (fun env Γ => (a : a_exp) env Γ >= (b : a_exp) env Γ) (in custom assertion at level 70) : assertion_scope.
-    Notation "a > b"  := (fun env Γ => (a : a_exp) env Γ >  (b : a_exp) env Γ) (in custom assertion at level 70) : assertion_scope. *)
-    (* Notation "'True'" := True.
-    Notation "'True'" := (fun st => True) (in custom assn at level 0) : assertion_scope.
-    Notation "'False'" := False.
-    Notation "'False'" := (fun st => False) (in custom assn at level 0) : assertion_scope. *)
-
-    (* Notation "a + b" := (fun st => (a:Aexp) st + (b:Aexp) st) (in custom assn at level 50, left associativity) : assertion_scope.
-    Notation "a - b" := (fun st => (a:Aexp) st - (b:Aexp) st) (in custom assn at level 50, left associativity) : assertion_scope.
-    Notation "a * b" := (fun st => (a:Aexp) st * (b:Aexp) st) (in custom assn at level 40, left associativity) : assertion_scope. *)
-
-    (* Notation "'(' x ')'" := x (in custom assertion) : assertion_scope. *)
-
-    (** Occasionally we need to "escape" a raw "Coq-defined" function to express
-        a particularly complicated assertion.  We can do that using a [$] prefix,
-        as in [{{ $(raw_coq) }}].
-
-        For example, [{{ $(fun st => forall X, st X = 0) }}] indicates an assertion that
-        every variable of [X] maps to [0] in the given state.
-     *)
-    (* Notation "$ f" := f (in custom assertion at level 0, f constr at level 0) : assertion_scope. *)
-    (* Notation "x" := (x%assertion) (in custom assertion at level 0, x constr at level 0) : assertion_scope. *)
-    (* Notation "x" := (x) (in custom assertion at level 0, x constr at level 0) : assertion_scope. *)
-
-    (* Definition aImpl (P Q : assertion) : Prop :=
-      forall env Γ, P env Γ -> Q env Γ.
-
-    Definition aIff (P Q : assertion) : Prop :=
-      aImpl P Q /\ aImpl P Q.
-
-    Notation "P '->>' Q" := (aImpl P Q) (at level 80).
-
-    Notation "P '<<->>' Q" := (aIff P Q) (at level 80). *)
 
     (* This definition implements the idea of hoare logic for
       koika. (refer to https://en.wikipedia.org/wiki/Hoare_logic)
@@ -444,7 +440,7 @@ Section Hoare.
       Q r (commit_update env log) Γ'.
 
     Definition hoare_triple_args {argspec: tsig var_t}
-      (P : assertion) (args : acontext sig argspec (pos_t := unit) (fn_name_t := string)) (Q : tcontext argspec -> assertion) : Prop :=
+      (P : assertion) (args : acontext sig argspec) (Q : tcontext argspec -> assertion) : Prop :=
       ∀ env Γ Γ' log r_ctx,
       P env Γ ->
       interp_args env sigma Γ log_empty log_empty args = Some (log, r_ctx, Γ') ->
@@ -460,26 +456,42 @@ Section Hoare.
       hoare_triple P a Q.
     Arguments hoare_triple' a & P Q : assert.
 
-    Definition hoare_triple_triple'_eq : ∀ a P, hoare_triple P a = hoare_triple' a P
-      := fun _ _ => eq_refl.
+    Lemma hoare_triple_triple'_eq : ∀ a P, hoare_triple P a = hoare_triple' a P.
+     reflexivity. Qed.
 
     (* This lemma prooves the log irrelevance -
 
       if an assertion holds on empty logs then it holds on every pair of logs *)
-    Lemma hoare_log_irr `{FiniteType reg_t} : ∀ P a Q,
+    Lemma hoare_log_irr : ∀ P a Q,
       hoare_triple P a Q ->
       ∀ env Γ Γ' slog alog alog' r,
       P (commit_update env (log_app alog slog)) Γ ->
       interp_action env sigma Γ slog alog a = Some (alog', r, Γ') ->
       Q r (commit_update env (log_app alog' slog)) Γ'.
     Proof.
-      intros P a Q Hht env Γ Γ' slog alog alog' r HP Hin.
+      intros * Hht env Γ Γ' slog alog alog' r HP Hin.
       unfold hoare_triple in Hht.
-      apply interp_log_irrelevance in Hin.
+      apply interp_action_log_irrelevance in Hin.
       destruct Hin as [? [Hin  Hlog]].
-      specialize (Hht (commit_update env (log_app alog slog)) Γ Γ' _ _ HP Hin).
+      specialize (Hht _ _ _ _ _ HP Hin).
       now rewrite commit_update_assoc, log_app_assoc, <- Hlog in Hht.
     Qed.
+
+    Lemma hoare_log_irr_args {argspec: tsig var_t} : ∀ P (args : acontext sig argspec) Q,
+      hoare_triple_args P args Q ->
+      ∀ env Γ Γ' slog alog alog' r,
+      P (commit_update env (log_app alog slog)) Γ ->
+      interp_args env sigma Γ slog alog args = Some (alog', r, Γ') ->
+      Q r (commit_update env (log_app alog' slog)) Γ'.
+    Proof.
+      intros * Hht * HP Hin.
+      unfold hoare_triple_args in Hht.
+      apply interp_args_log_irrelevance in Hin.
+      destruct Hin as [? [Hin  Hlog]].
+      specialize (Hht _ _ _ _ _ HP Hin).
+      now rewrite commit_update_assoc, log_app_assoc, <- Hlog in Hht.
+    Qed.
+
   End HoareTriple.
 End Hoare.
 
@@ -498,7 +510,7 @@ Section HoareCoercions.
 
   Coercion assertion_of_Prop (P : Prop) : assertion := fun _ _ => P.
   #[warnings="-uniform-inheritance"]
-  Coercion assertion_of_ret_assertion {tau} (a : assertion) : @ret_assertion tau := fun _ => a.
+  Coercion ret_assertion_of_assertion {tau} (a : assertion) : @ret_assertion tau := fun _ => a.
 
   Coercion a_exp_of_const {t : type} (v : t) : a_exp := fun _ _ => v.
   Coercion a_exp_of_reg (r : reg_t) : a_exp := fun env _ => env.[r].
@@ -521,7 +533,7 @@ Module Import HoareNotations.
   Delimit Scope assertion_expr_scope with a_exp.
 
   Notation "'#' f x .. y" := (fun env Γ => (.. (f ((x : a_exp) env Γ)) .. ((y : a_exp) env Γ)))
-    (at level 0, f constr at level 0) : assertion_scope.
+    (at level 1, f constr at level 0) : assertion_scope.
   Notation "P -> Q"  := (fun env Γ => (P : assertion) env Γ ->  (Q : assertion) env Γ) : assertion_scope.
   Notation "P <-> Q" := (fun env Γ => (P : assertion) env Γ <-> (Q : assertion) env Γ) : assertion_scope.
   Notation "P /\ Q"  := (fun env Γ => (P : assertion) env Γ /\  (Q : assertion) env Γ) : assertion_scope.
@@ -535,11 +547,6 @@ Module Import HoareNotations.
   Notation "a >= b" := (fun env Γ => (a : a_exp) env Γ >= (b : a_exp) env Γ) : assertion_scope.
   Notation "a > b"  := (fun env Γ => (a : a_exp) env Γ >  (b : a_exp) env Γ) : assertion_scope.
 
-  (* Definition idk : assertion := True.
-  Definition idk2 : assertion := False.
-
-  Definition idk3 : assertion := idk -> idk2 /\ ((fun r _ _ => r = Ob) : assertion). *)
-
   Declare Scope ret_assertion_scope.
   Declare Scope ret_assertion_expr_scope.
   Bind Scope ret_assertion_scope with ret_assertion.
@@ -548,7 +555,7 @@ Module Import HoareNotations.
   Delimit Scope ret_assertion_expr_scope with ret_a_exp.
 
   Notation "'#' f x .. y" := (fun ret env Γ => (.. (f ((x : a_exp) ret env Γ)) .. ((y : a_exp) ret env Γ)))
-    (at level 0, f constr at level 0) : ret_assertion_scope.
+    (at level 1, f constr at level 0) : ret_assertion_scope.
   Notation "P -> Q"  := (fun ret env Γ => (P : ret_assertion) ret env Γ ->  (Q : ret_assertion) ret env Γ) : ret_assertion_scope.
   Notation "P <-> Q" := (fun ret env Γ => (P : ret_assertion) ret env Γ <-> (Q : ret_assertion) ret env Γ) : ret_assertion_scope.
   Notation "P /\ Q"  := (fun ret env Γ => (P : ret_assertion) ret env Γ /\  (Q : ret_assertion) ret env Γ) : ret_assertion_scope.
@@ -570,16 +577,28 @@ Section HoareFacts.
   Context {reg_t ext_fn_t: Type}.
   Context {R: reg_t -> type}.
   Context {Sigma: ext_fn_t -> ExternalSignature}.
-  (* Context {sig: tsig string}. *)
   (* Register environment a Map-Type from register names to their values *)
   Context {REnv: Env reg_t}.
 
-  Local Ltac specialize_hoare :=
-    match goal with
+  #[local] Ltac solve_hoare :=
+    repeat match goal with
     | HP: ?P _ _,
       HHT: hoare_triple ?P ?a _,
       Hin: interp_action _ _ _ _ _ ?a = Some _ |- _=>
-      specialize (HHT _ _ _ _ _ HP Hin)
+      specialize (HHT _ _ _ _ _ HP Hin); cbn in HHT
+    | H: ?Q ?r (commit_update _ (_ ?l log_empty)) ?G |-
+          ?Q ?r (commit_update _ ?l) ?G => now rewrite log_app_empty_l in H
+    | HHT: hoare_triple ?P ?a ?Q,
+      HP: ?P (commit_update ?env ?al) ?c,
+      Hin: interp_action ?env _ _ log_empty ?al ?a = Some _ |- _ =>
+      rewrite <- (log_app_empty_l al) in HP;
+      pose_once (hoare_log_irr _ _ _ HHT  _ _ _ _ _ _ _ HP Hin)
+    | |- hoare_triple _ _ _ => unfold hoare_triple
+    | |- context[commit_update _ log_empty] => rewrite commit_update_empty
+    | H: context [(fun _ => _) _] |- _ => progress (cbv beta in H)
+    | _ => progress simpl_hoare
+    | _ => progress intros
+    | _ => solve [eauto with hoare]
     end.
 
   #[local] Notation action sig tau := (action unit string string R Sigma sig tau).
@@ -590,25 +609,25 @@ Section HoareFacts.
 
     Theorem hoare_post_true {sig tau} : ∀ P (a : action sig tau),
       {{ P }} a {{ True }}.
-    Proof. easy. Qed.
+    Proof. solve_hoare. Qed.
 
     Theorem hoare_pre_false {sig tau} : ∀ Q (a : action sig tau),
       {{ False }} a {{ Q }}.
-    Proof. easy. Qed.
+    Proof. solve_hoare. Qed.
 
     (* as the name signifies this rule is intended for backwards reasoning *)
     Theorem hoare_weaken_pre {sig tau} : ∀ P P' Q (a : action sig tau),
       {{ P' }} a {{ Q }} ->
       hoare( P -> P' ) ->
       {{ P }} a {{ Q }}.
-    Proof. eauto with hoare. Qed.
+    Proof. solve_hoare. Qed.
 
     (* as the name signifies this rule is intended for backwards reasoning *)
     Theorem hoare_strengthen_post {sig tau} : ∀ P Q Q' (a : action sig tau),
       {{ P }} a {{ Q' }} ->
       (forall ret env Γ, Q' ret env Γ -> Q ret env Γ) ->
       {{ P }} a {{ Q }}.
-    Proof. eauto with hoare. Qed.
+    Proof. solve_hoare. Qed.
 
     (* A combination of both rules *)
     Theorem hoare_consequence {sig tau} : ∀ P P' Q Q' (a : action sig tau),
@@ -616,45 +635,30 @@ Section HoareFacts.
       hoare( P -> P' ) ->
       (forall ret env Γ, Q' ret env Γ -> Q ret env Γ) ->
       {{ P }} a {{ Q }}.
-    Proof. eauto with hoare. Qed.
+    Proof. solve_hoare. Qed.
 
     Theorem hoare_fail {sig} tau : ∀ Q,
       {{ True }} (Fail tau : action sig _) {{ Q }}.
-    Proof. easy. Qed.
+    Proof. solve_hoare. Qed.
 
     Theorem hoare_var {sig tau} {k} (m : member (k,tau) _) : ∀ Q,
       {{ fun env Γ => Q (cassoc m Γ) env Γ }} (Var m : action sig tau) {{ Q }}.
-    Proof.
-      intros. unfold hoare_triple. intros * HP; inversion 1; subst.
-      now rewrite commit_update_empty.
-    Qed.
+    Proof. solve_hoare. Qed.
 
     Theorem hoare_const {sig tau} (cst : type_denote tau) : ∀ Q,
       {{ fun env Γ => Q cst env Γ }} (Const cst : action sig tau) {{ Q }}.
-    Proof. unfold hoare_triple; intros * HP; inversion 1; subst.
-      now rewrite commit_update_empty.
-    Qed.
+    Proof. solve_hoare. Qed.
 
     Theorem hoare_assign {sig tau} {k} (m : member (k,tau) _) (exp : action sig tau): ∀ P Q,
       {{ P }} exp {{ fun r env Γ => Q Ob env (creplace m r Γ)}} ->
       {{ P }} (Assign m exp) {{ Q }}.
-    Proof. intros * Hexp; unfold hoare_triple; intros * HP; inversion 1; subst.
-      simpl_hoare.
-      now specialize_hoare.
-    Qed.
+    Proof. solve_hoare. Qed.
 
     Theorem hoare_seq `{FiniteType reg_t} {sig tau} c1 (c2 : action sig tau) : ∀ P Q R,
       {{ Q }} c2 {{ R }} →
       {{ P }} c1 {{ Q }} →
       {{ P }} <{ `c1`; `c2` }> {{ R }}.
-    Proof.
-      intros * Hc2 Hc1. unfold hoare_triple. intros * HP Hinterp.
-      simpl_hoare.
-      specialize_hoare; cbv beta in Hc1.
-      rewrite <- (log_app_empty_l l) in Hc1.
-      pose proof (Hl := hoare_log_irr _ _ _ Hc2  _ _ _ _ _ _ _ Hc1 H1).
-      now rewrite <- (log_app_empty_l log).
-    Qed.
+    Proof. solve_hoare. Qed.
 
     (* Γ[v ↦ exp] == CtxCons (v, _) val_of_expr Γ *)
     Theorem hoare_bind `{FiniteType reg_t} {sig tau tau'} v (exp : action sig tau') (body : action _ tau) :
@@ -662,85 +666,66 @@ Section HoareFacts.
       {{ Q }} body {{ fun r env Γ => R r env (ctl Γ) }} ->
       {{ P }} exp {{ fun r env Γ => Q env (CtxCons (v, tau') r Γ) }} ->
       {{ P }} (Bind v exp body) {{ R }}.
-    Proof.
-      intros * Hbody Hexp; unfold hoare_triple; intros * Hp Hin. cbn in Hin.
-      simpl_hoare.
-      specialize_hoare.
-      cbn in Hexp.
-      rewrite <- (log_app_empty_l l) in Hexp.
-      pose proof (hoare_log_irr _ _ _ Hbody _ _ _ _ _ _ _ Hexp Heq0).
-      cbn in H0.
-      now rewrite log_app_empty_l in H0.
-    Qed.
+    Proof. solve_hoare. Qed.
 
     Theorem hoare_if `{FiniteType reg_t} {sig tau} (c : action sig (bits_t 1)) (tr fl : action sig tau): ∀ P Qtr Qfl R,
       {{ Qfl }} fl {{ R }} ->
       {{ Qtr }} tr {{ R }} ->
       {{ P }} c {{ fun r env Γ => if Bits.single r then Qtr env Γ else Qfl env Γ }} ->
       {{ P }} <{if `c` then `tr` else `fl`}> {{ R }}.
-    Proof.
-      intros * Hfl Htr Hc; unfold hoare_triple; intros * Hp Hin. cbn in Hin.
-      simpl_hoare; specialize_hoare; cbn in Hc; rewrite Heqb, <- (log_app_empty_l l) in Hc.
-      + pose proof (hoare_log_irr _ _ _ Htr _ _ _ _ _ _ _ Hc H1). now rewrite log_app_empty_l in H0.
-      + pose proof (hoare_log_irr _ _ _ Hfl _ _ _ _ _ _ _ Hc H1). now rewrite log_app_empty_l in H0.
-    Qed.
+    Proof. solve_hoare; rewrite Heqb in H2; solve_hoare. Qed.
 
     Theorem hoare_read `{FiniteType reg_t} {sig} port reg : ∀ Q,
       {{ fun env Γ => Q env.[reg] env Γ }} (Read port reg : action sig _) {{ Q }}.
-    Proof. intros. unfold hoare_triple. intros * HP Hin; cbn in Hin.
-      rewrite may_read_empty in Hin; inversion Hin; subst.
-      rewrite commit_read, commit_update_empty by easy.
-      simpl_hoare.
+    Proof. solve_hoare;
+      rewrite commit_read, commit_update_empty by easy; solve_hoare.
       now rewrite latest_write0_empty in Heqo0.
     Qed.
 
     Theorem hoare_write `{FiniteType reg_t} {sig} port reg exp : ∀ (P Q : assertion),
       {{ P }} exp {{ fun ret env Γ => Q (REnv.(putenv) env reg ret) Γ }} ->
       {{ P }} (Write port reg exp: action sig _) {{ Q }}.
-    Proof. intros * Hexp; unfold hoare_triple;intros * HP Hin; cbn in Hin.
-      simpl_hoare;
-      specialize_hoare; cbn in Hexp;
-      now rewrite commit_write by easy.
-    Qed.
+    Proof. solve_hoare; now rewrite commit_write. Qed.
 
     Theorem hoare_unop {sig} fn (a1 : action sig _) : ∀ P Q,
       {{ P }} a1 {{ fun r env Γ => Q ((PrimSpecs.sigma1 fn) r) env Γ }} ->
       {{ P }} (Unop fn a1) {{ Q }}.
-    Proof. intros * Ha1. unfold hoare_triple. intros * HP Hin. cbn in Hin.
-      simpl_hoare.
-      now specialize_hoare.
-    Qed.
+    Proof. solve_hoare. Qed.
 
-    Theorem hoare_binop `{FiniteType reg_t} {sig} fn a1 (a2 : action sig _) r1: ∀ P Q R,
+    Theorem hoare_binop `{FiniteType reg_t} {sig} fn a1 (a2 : action sig _) r1:
+      ∀ P Q R,
       {{ Q }} a2 {{ fun r2 env Γ => R ((PrimSpecs.sigma2 fn) r1 r2) env Γ }} ->
       {{ P }} a1 {{ fun r env Γ => r1 = r /\ Q env Γ }} ->
       {{ P }} (Binop fn a1 a2) {{ R }}.
-    Proof. intros * Ha1 Ha2. unfold hoare_triple. intros * HP Hin. cbn in Hin.
-      simpl_hoare.
-      specialize_hoare.
-      cbn in Ha2.
-      destruct Ha2 as [? Ha2]. subst.
-      rewrite <- (log_app_empty_l l) in Ha2.
-      pose proof (hoare_log_irr _ _ _ Ha1 _ _ _ _ _ _ _ Ha2 Heq0).
-      cbn in H0.
-      now rewrite log_app_empty_l in H0.
-    Qed.
+    Proof. solve_hoare. Qed.
 
-    Theorem hoare_apos {sig tau} pos (a : action sig tau): ∀ P Q,
+    Theorem hoare_apos {sig tau} pos (a : action sig tau):
+      ∀ P Q,
       {{ P }} a {{ Q }} ->
       {{ P }} (APos pos a) {{ Q }}.
-    Proof. easy. Qed.
+    Proof. solve_hoare. Qed.
+
+    Theorem hoare_int_call `{FiniteType reg_t} {sig tau} {argspec : tsig var_t} (fn : InternalFunction' string (action argspec tau)) (args : acontext sig argspec) Γ':
+      ∀ P Q R,
+      {{ Q }} fn.(int_body) {{ fun r env Γ => R r env Γ'}} ->
+      hoare_triple_args P args (fun rs env Γ => Q env rs /\ Γ' = Γ ) (sigma := sigma)  ->
+      {{ P }} (InternalCall fn args) {{ R }}.
+    Proof. intros * Hbody Hargs. unfold hoare_triple. intros * HP Hin. cbn in Hin.
+      simpl_hoare.
+      unfold hoare_triple_args in Hargs.
+      specialize (Hargs _ _ _ _ _ HP Heq).
+      destruct Hargs; subst.
+      rewrite <- (log_app_empty_l l) in H0.
+      pose proof (hoare_log_irr _ _ _ Hbody _ _ _ _ _ _ _ H0 Heq0).
+      cbn in H1.
+      now rewrite log_app_empty_l in H1.
+    Qed.
   End sigma.
 
   Theorem hoare_ext_call {sig} sigma fn a: ∀ P Q,
     hoare_triple P a (fun r env Γ => Q (sigma fn r) env Γ) (sigma := sigma) (REnv := REnv) ->
     hoare_triple P (ExternalCall fn a : action sig _) Q (sigma := sigma) (REnv := REnv).
-  Proof. intros * Ha. unfold hoare_triple. intros * HP Hin. cbn in Hin.
-    simpl_hoare.
-    now specialize_hoare.
-  Qed.
-
-  (* Theorem hoare_int_call {sig tau} *)
+  Proof. solve_hoare. Qed.
 
 End HoareFacts.
 
@@ -771,30 +756,29 @@ Notation "ctx .[ f ]" := (@cassoc _ _ _ (f,_) _ (convert_ctx ctx)).
 
 Open Scope nat_scope.
 
-
-Ltac hoare :=
+Ltac k_hoare :=
   match goal with
   | |- hoare_triple ?P ?a ?Q => not_evar P; eapply (hoare_weaken_pre P _ Q a)
   end;
   repeat lazymatch goal with
-  | |- hoare_triple _ (Fail ?tau) ?Q            => eapply (hoare_fail tau Q)
-  | |- hoare_triple _ (Var ?m) ?Q               => eapply (hoare_var m Q)
-  | |- hoare_triple _ (Const ?cst) ?Q           => eapply (hoare_const cst Q)
-  | |- hoare_triple _ (Assign ?m ?exp) ?Q       => eapply (hoare_assign m exp _ Q)
-  | |- hoare_triple _ (Seq ?c1 ?c2) ?R          => eapply (hoare_seq c1 c2 _ _ R)
-  | |- hoare_triple _ (Bind ?var ?exp ?body) ?R => eapply (hoare_bind var exp body _ _ R)
-  | |- hoare_triple _ (If ?c ?tr ?fl) ?R        => eapply (hoare_if c tr fl _ _ _ R)
-  | |- hoare_triple _ (Read ?p ?idx) ?Q         => eapply (hoare_read p idx Q)
-  | |- hoare_triple _ (Write ?p ?idx ?exp) ?Q   => eapply (hoare_write p idx exp _ Q)
-  | |- hoare_triple _ (Unop ?fn ?a1) ?Q         => eapply (hoare_unop fn a1 _ Q)
-  | |- hoare_triple _ (Binop ?fn ?a1 ?a2) ?R    => eapply (hoare_binop fn a1 a2 _ _ _ R)
-  | |- hoare_triple _ (ExternalCall ?fn ?a) ?Q  => eapply (hoare_ext_call _ fn a _ Q)
-  (* | |- hoare_triple _ (InternalCall ?fn ?args) ?Q => TODO *)
-  | |- hoare_triple _ (APos ?pos ?a) ?Q         => eapply (hoare_apos pos a _ Q)
+  | |- hoare_triple _ (Fail ?tau) ?Q              => eapply (hoare_fail tau Q)
+  | |- hoare_triple _ (Var ?m) ?Q                 => eapply (hoare_var m Q)
+  | |- hoare_triple _ (Const ?cst) ?Q             => eapply (hoare_const cst Q)
+  | |- hoare_triple _ (Assign ?m ?exp) ?Q         => eapply (hoare_assign m exp _ Q)
+  | |- hoare_triple _ (Seq ?c1 ?c2) ?R            => eapply (hoare_seq c1 c2 _ _ R)
+  | |- hoare_triple _ (Bind ?var ?exp ?body) ?R   => eapply (hoare_bind var exp body _ _ R)
+  | |- hoare_triple _ (If ?c ?tr ?fl) ?R          => eapply (hoare_if c tr fl _ _ _ R)
+  | |- hoare_triple _ (Read ?p ?idx) ?Q           => eapply (hoare_read p idx Q)
+  | |- hoare_triple _ (Write ?p ?idx ?exp) ?Q     => eapply (hoare_write p idx exp _ Q)
+  | |- hoare_triple _ (Unop ?fn ?a1) ?Q           => eapply (hoare_unop fn a1 _ Q)
+  | |- hoare_triple _ (Binop ?fn ?a1 ?a2) ?R      => eapply (hoare_binop fn a1 a2 _ _ _ R)
+  | |- hoare_triple _ (ExternalCall ?fn ?a) ?Q    => eapply (hoare_ext_call _ fn a _ Q)
+  | |- hoare_triple _ (InternalCall ?fn ?args) ?R => eapply (hoare_int_call fn args _ _ _ R)
+  | |- hoare_triple _ (APos ?pos ?a) ?Q           => eapply (hoare_apos pos a _ Q)
   end.
 
-Lemma min_correct m n env:
-  hoare_triple' (sigma := empty_sigma) (REnv := env)
+Lemma min_correct m n REnv:
+  hoare_triple' (sigma := empty_sigma) (REnv := REnv)
 
   min.(int_body)
   (* (Γ.[ a ] = (a_exp_of_const (Bits.of_nat 5 m)) /\ Γ.[ b ] = Bits.of_nat 5 n) *)
@@ -804,8 +788,8 @@ Proof.
   unfold hoare_triple'.
   unfold min, int_body.
   unfold TypedParsing.refine_sig_tau.
-  hoare.
-  unfold convert_ctx, id. intros. destruct H. rewrite ?H, ?H0. split. reflexivity.
+  k_hoare.
+  unfold convert_ctx, id; intros env Γ H. destruct H. rewrite ?H, ?H0. split. reflexivity.
   simpl (arg2Sig _).
   rewrite H0.
   simpl (Bits.single _).
