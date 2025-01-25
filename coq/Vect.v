@@ -29,6 +29,36 @@ Fixpoint index_of_nat (sz n: nat) : option (index sz) :=
     end
   end.
 
+(* This version uses a proof to convice the typechecker that the
+  first case (above the None case) is never taken on conforming inputs
+
+  Note: The proof is used with care to only appear in the computationally
+    irrelevant part. Thus this function even computes with an opaque proof
+    as input.
+  *)
+Fixpoint index_of_nat_safe (sz n: nat) : n < sz -> index sz :=
+  match sz return (n < sz -> index sz) with
+  | 0 => fun Hsz => match (Nat.nlt_0_r _ Hsz) with end
+  | S sz' => match n return (n < S sz' -> index (S sz')) with
+    | 0 => fun _ => thisone
+    | S n => fun Hsz => anotherone (index_of_nat_safe sz' n (Arith_prebase.lt_S_n _ _ Hsz))
+    end
+  end.
+
+Lemma index_of_nat_of_nat_safe :
+  forall sz n i,
+  index_of_nat sz n = Some i ->
+  forall H, index_of_nat_safe sz n H = i.
+Proof.
+  intro sz. induction sz as [| ? IH];
+  intros [| ?] i H; inversion H as [H1].
+  * reflexivity.
+  * intro Hlt.
+    destruct (index_of_nat sz n) eqn:H'; inversion H1.
+    specialize (IH _ _ H' (Arith_prebase.lt_S_n _ _ Hlt)).
+    cbn. now rewrite IH.
+Qed.
+
 Fixpoint index_to_nat {sz} (idx: index sz) {struct sz} : nat :=
   match sz return index sz -> nat with
   | 0 => fun idx => False_rect _ idx
