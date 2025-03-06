@@ -380,6 +380,15 @@ Notation "r '|>' s" :=
 Notation "'done'" :=
   Syntax.Done.
 
+Declare Scope schedule_scope.
+Delimit Scope schedule_scope with schedule.
+
+Bind Scope schedule_scope with Syntax.scheduler.
+
+Notation "[ ]" := Syntax.Done (format "[ ]") : schedule_scope.
+Notation "[ x ]" := (Syntax.Cons x Syntax.Done) : schedule_scope.
+Notation "[ x ; y ; .. ; z ]" :=  (Syntax.Cons x (Syntax.Cons y .. (Syntax.Cons z Syntax.Done) ..)) : schedule_scope.
+
 Module Type Tests.
   Parameter pos_t : Type.
   Inductive reg_t := reg1.
