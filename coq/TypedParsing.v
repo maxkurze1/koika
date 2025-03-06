@@ -202,7 +202,7 @@ Notation "'#' s" := (Const (tau := bits_t _) s) (in custom koika_t at level 0, s
  *   Thus, the same restrictions apply.
  *)
 Notation "a" := (Var (k := id_to_s a) _) (in custom koika_t at level 0, a constr at level 0, only parsing).
-Notation "a" := (Var a) (in custom koika_t at level 0, a constr at level 0, only printing).
+Notation "a" := (Var (k := a) _) (in custom koika_t at level 0, a constr at level 0, only printing).
 
 (* Alternative shorter set syntax
  * Note: expr is level 89 to stay below ';' *)
