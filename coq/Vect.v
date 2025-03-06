@@ -1568,11 +1568,11 @@ Notation "bs '~' 1" := (Bits.cons true bs) (at level 7, left associativity, form
 Notation "'Ob'" := Bits.nil (at level 7) : bits. (* https://github.com/coq/coq/issues/12370 *)
 
 Infix "+b" := Bits.plus (at level 50, left associativity): bits.
-Infix "-b" := Bits.minus (at level 50, left associativity): bits .
-Infix "*b" := Bits.mul (at level 40, left associativity): bits .
-Infix ">>b" := Bits.lsr (at level 30, no associativity): bits .
-Infix ">>>b" := Bits.asr (at level 30, no associativity): bits .
-Infix "<<b" := Bits.lsl (at level 30, no associativity): bits .
+Infix "-b" := Bits.minus (at level 50, left associativity): bits.
+Infix "*b" := Bits.mul (at level 40, left associativity): bits.
+Notation "b '>>b' n" := (Bits.lsr n b) (at level 30, no associativity) : bits.
+Notation "b '>>>b' n" := (Bits.asr n b) (at level 30, no associativity): bits.
+Notation "b '<<b' n" := (Bits.lsl n b) (at level 30, no associativity): bits.
 Infix "<?b" := Bits.unsigned_lt (at level 70, no associativity): bits.
 Infix "<=?b" := Bits.unsigned_le (at level 70, no associativity): bits.
 Infix ">?b" := Bits.unsigned_gt (at level 70, no associativity): bits.
