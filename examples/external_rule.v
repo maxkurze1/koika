@@ -1,5 +1,6 @@
 (*! Calling external (verilog) modules from Kôika !*)
 Require Import Koika.Frontend.
+Require Import Koika.Parsing.
 Require Koika.Std.
 
 (* Koika.Std.Fifo1 is a polymorphic one-element fifo.

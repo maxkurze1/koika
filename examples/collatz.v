@@ -1,5 +1,6 @@
 (*! Computing terms of the Collatz sequence (Coq version) !*)
 Require Import Koika.Frontend.
+Require Import Koika.Parsing.
 
 Module Collatz.
   (*! We have one register ``r0``: !*)

@@ -1,5 +1,6 @@
 (*! Regression test for bit reversal !*)
 Require Import Koika.Frontend.
+Require Import Koika.Parsing.
 
 Inductive reg_t := r1.
 

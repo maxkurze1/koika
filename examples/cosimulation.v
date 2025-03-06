@@ -1,5 +1,6 @@
 (*! Using black-box Verilog models (combining Cuttlesim and Verilator) !*)
 Require Import Koika.Frontend.
+Require Import Koika.Parsing.
 
 Module CoSimulation.
   Inductive reg_t := counter | blackbox_response.
