@@ -278,11 +278,11 @@ Definition twist (stage:nat) (index:nat) : uaction reg_t ext_fn_t :=
   Definition rules :=
     tc_rules R Sigma
              (fun r => match r with
-                    | tb => _tb 
+                    | tb => _tb
                     end).
 
   Definition external (r: rule_name_t) := false.
-  
+
   Definition package :=
     {| ip_koika := {| koika_reg_types := R;
                      koika_reg_init := r;

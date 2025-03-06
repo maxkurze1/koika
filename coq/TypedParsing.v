@@ -1,5 +1,5 @@
 (* Frontend | Parser for the (typed) Kôika EDSL
- * 
+ *
  * This file contains all notations which are used
  * to adjust coq's parser and enable it to parse
  * koika.
@@ -191,12 +191,12 @@ Notation "'#' s" := (Const (tau := bits_t _) s) (in custom koika_t at level 0, s
  *   All these notations need to be on the same level (here 0)
  *   else the parser would match on the highest level first and
  *   never even consider notations on a lower level.
- * 
+ *
  *   Likewise, all these notations need to start with a variable
  *   on the same level and in the same grammar (here a constr on level 0).
  *   Only so the parser can parse this variable first and then decide
  *   (depending on the following tokens) which notation matches.
- * 
+ *
  * Note:
  *   Some of the literal notations also start with an identifier.
  *   Thus, the same restrictions apply.
@@ -352,7 +352,7 @@ Notation "'substbits@' sig '(' v ',' f ',' a ')'" := (Binop (Bits2 (SubstFieldBi
 Notation "'aref' '(' v ',' f ')'"                   := (Unop  (Array1  (GetElement         f)) v)   (in custom koika_t,           f constr, format "'aref' '(' v ','  f ')'").
 Notation "'arefbits' '(' t ',' v ',' f ')'"         := (Unop  (Array1  (GetElementBits   t f)) v)   (in custom koika_t, t constr, f constr, format "'arefbits' '(' t ','  v ','  f ')'").
 Notation "'asubst' '(' v ',' f ',' a ')'"           := (Binop (Array2  (SubstElement       f)) v a) (in custom koika_t,           f constr, format "'asubst' '(' v ','  f ',' a ')'").
-Notation "'asubstbits' '(' t ',' v ',' f ',' a ')'" := (Binop (Array2  (SubstElementBits t f)) v a) (in custom koika_t, t constr, f constr, format "'asubstbits' '(' t ','  v ','  f ',' a ')'"). 
+Notation "'asubstbits' '(' t ',' v ',' f ',' a ')'" := (Binop (Array2  (SubstElementBits t f)) v a) (in custom koika_t, t constr, f constr, format "'asubstbits' '(' t ','  v ','  f ',' a ')'").
 
 (* koika_t_branches - utility
  *
@@ -403,7 +403,7 @@ Module Type Tests.
   Definition test_lit  : _action := <{ Ob~1~1~0~0~1 }>.
   Definition test_lit2 : _action := <{ |10 `d 10| }>.
   Definition test_pass : _action := <{ pass }>.
- 
+
   Definition test_var    : _action := <{ let a := Ob~1~1 in a }>.
   Definition test_seq    : _action := <{ let a := Ob~1~1 in pass; a }>.
   Definition test_assign : _action := <{ let a := Ob~1~1 in pass; set a := Ob~0~1 }>.
@@ -511,7 +511,7 @@ Module Type Tests2.
   #[program ]Definition idk : _action (tau := bits_t 3) := <{
     (!read0(data0))[Ob~1~1~1 :+ 3]
   }>.
-  
+
   #[program] Definition idk2 : _action := <{
     let idk := Ob~1~1~1~0~0 in
     ignore(if (!idk)[#(Bits.of_nat 3 0) :+ 1] then (
@@ -557,7 +557,7 @@ Module Type Tests2.
       unpack(struct_t mem_req, pack(a))
   }>.
   Fail Next Obligation.
-  
+
   Notation "'[|' a '=koika=' b '|]'" := ((a : _action) = (b : _action)) (at level 0, a custom koika_t at level 200, b custom koika_t at level 200).
 
   (* sequences in match statements without paranthesis *)
